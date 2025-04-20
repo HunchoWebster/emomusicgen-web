@@ -1,35 +1,42 @@
-# EmoMusicGen_Web
+# EmoMusicGen Web
 
-基于Audiocraft的情感音乐生成Web应用
+一个基于情感的音乐生成Web应用程序，利用人工智能技术根据用户的情感状态生成相应的音乐。
 
-## 项目简介
+## 功能
 
-这是一个基于Meta的Audiocraft项目开发的情感音乐生成Web应用。该项目使用了Audiocraft的MusicGen模型，并添加了情感控制功能，能够生成符合特定情感的音乐片段。
+- 情感音乐生成
+- 音频分析
+- Web界面交互
+
+## 技术栈
+
+- Python
+- Flask
+- 音频处理库
+- AI模型
 
 ## 安装与使用
 
 1. 克隆仓库
 ```bash
-git clone https://github.com/你的用户名/EmoMusicGen_Web.git
-cd EmoMusicGen_Web
+git clone https://github.com/HunchoWebster/emomusicgen-web.git
 ```
 
 2. 安装依赖
 ```bash
-pip install -r requirements.txt
+pip install -r audiocraft/webpage/requirements.txt
 ```
 
-3. 运行Web应用
+3. 运行应用
 ```bash
-# 在这里添加启动命令
+python audiocraft/webpage/app.py
 ```
 
-## 功能特点
+## Docker部署
 
-- 情感音乐生成
-- Web界面交互
-- 自定义音乐参数
+可以使用提供的Dockerfile进行Docker部署：
 
-## 致谢
-
-本项目基于[Audiocraft](https://github.com/facebookresearch/audiocraft)开发 
+```bash
+cd audiocraft/webpage
+sh docker_deploy.sh
+``` 

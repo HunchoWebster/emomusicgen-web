@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情绪调节音乐生成器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-top: 50px;
+        }
+        .navbar {
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .prompt {
+            background-color: #e2e3e5;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        #audioPlayer {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .progress {
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            transition: width 0.5s ease;
+        }
+        #promptDisplay {
+            margin-top: 20px;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+            display: none;
+        }
+        .typing-animation {
+            overflow: hidden;
+            border-right: .15em solid orange;
+            white-space: nowrap;
+            animation: typing 3.5s steps(40, end),
+                       blink-caret .75s step-end infinite;
+        }
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: orange; }
+        }
+    </style>
+    <script>
+        // 添加页面关闭事件处理
+        window.addEventListener('beforeunload', function() {
+            // 发送清理请求
+            navigator.sendBeacon('/cleanup');
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <!-- 添加导航栏 -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">情绪音乐生成器</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/">单一情绪音乐</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/transition">情绪过渡音乐</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        
+        <h1 class="text-center mb-4">情绪调节音乐生成器</h1>
+        
+        <div class="mb-3">
+            <label for="emotionText" class="form-label">请描述您当前的情绪状态：</label>
+            <textarea class="form-control" id="emotionText" rows="3" 
+                      placeholder="例如：今天工作压力很大，需要放松"></textarea>
+        </div>
+        
+        <div class="mb-3">
+            <label for="duration" class="form-label">音乐时长 (秒)</label>
+            <input type="range" class="form-range" id="duration" min="5" max="30" value="10">
+            <div class="text-center" id="durationValue">10 秒</div>
+        </div>
+        
+        <button class="btn btn-primary w-100" id="generateButton" onclick="generateMusic()">生成音乐</button>
+        
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p>正在处理您的请求...</p>
+        </div>
+        
+        <div id="promptDisplay" class="typing-animation"></div>
+        
+        <div class="progress" id="progressContainer">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                 role="progressbar" 
+                 id="progressBar"
+                 style="width: 0%">
+                0%
+            </div>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div id="promptContainer" class="prompt" style="display: none;">
+            <strong>生成的提示词：</strong>
+            <p id="promptText"></p>
+        </div>
+        
+        <div id="audioContainer" style="display: none;">
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="audioToggle" checked>
+                    <label class="form-check-label" for="audioToggle">使用音频处理</label>
+                </div>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">音频处理参数</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>基本参数</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <!-- 移除这里的时长滑条 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <h6>症状预设</h6>
+                        <div class="btn-group w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('anxiety')">焦虑</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('depression')">抑郁</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('insomnia')">失眠</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('stress')">压力过大</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('distraction')">注意力分散</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('pain')">慢性疼痛</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="applyPreset('ptsd')">创伤后应激</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="targetDb" class="form-label">目标响度 (dB)</label>
+                            <input type="range" class="form-range" id="targetDb" min="-30" max="-10" value="-20">
+                            <div class="text-center" id="targetDbValue">-20 dB</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="limiterThreshold" class="form-label">限幅阈值 (dB)</label>
+                            <input type="range" class="form-range" id="limiterThreshold" min="-3" max="0" value="-1">
+                            <div class="text-center" id="limiterThresholdValue">-1 dB</div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <label for="lowShelfGain" class="form-label">低频增益 (dB)</label>
+                            <input type="range" class="form-range" id="lowShelfGain" min="-12" max="12" value="0">
+                            <div class="text-center" id="lowShelfGainValue">0 dB</div>
+                            <label for="lowFreq" class="form-label">低频截止频率 (Hz)</label>
+                            <input type="range" class="form-range" id="lowFreq" min="20" max="500" value="100">
+                            <div class="text-center" id="lowFreqValue">100 Hz</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="midGain" class="form-label">中频增益 (dB)</label>
+                            <input type="range" class="form-range" id="midGain" min="-12" max="12" value="0">
+                            <div class="text-center" id="midGainValue">0 dB</div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <label for="midLowFreq" class="form-label">中频下限 (Hz)</label>
+                                    <input type="range" class="form-range" id="midLowFreq" min="200" max="2000" value="1000">
+                                    <div class="text-center" id="midLowFreqValue">1000 Hz</div>
+                                </div>
+                                <div class="col-6">
+                                    <label for="midHighFreq" class="form-label">中频上限 (Hz)</label>
+                                    <input type="range" class="form-range" id="midHighFreq" min="2000" max="8000" value="5000">
+                                    <div class="text-center" id="midHighFreqValue">5000 Hz</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="highShelfGain" class="form-label">高频增益 (dB)</label>
+                            <input type="range" class="form-range" id="highShelfGain" min="-12" max="12" value="0">
+                            <div class="text-center" id="highShelfGainValue">0 dB</div>
+                            <label for="highFreq" class="form-label">高频截止频率 (Hz)</label>
+                            <input type="range" class="form-range" id="highFreq" min="2000" max="16000" value="8000">
+                            <div class="text-center" id="highFreqValue">8000 Hz</div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button class="btn btn-primary" onclick="applyAudioProcessing()">应用处理</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>原始音频</h5>
+                    <audio id="rawAudioPlayer" controls>
+                        您的浏览器不支持音频播放
+                    </audio>
+                </div>
+                <div class="col-md-6">
+                    <h5>处理后音频</h5>
+                    <audio id="processedAudioPlayer" controls>
+                        您的浏览器不支持音频播放
+                    </audio>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 添加时长滑动条的事件监听
+        document.getElementById('duration').addEventListener('input', function() {
+            document.getElementById('durationValue').textContent = this.value + ' 秒';
+        });
+
+        function showStatus(message, isSuccess) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = isSuccess ? 'alert alert-success' : 'alert alert-danger';
+            status.style.display = 'block';
+        }
+
+        function updateProgress(progress) {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+        }
+
+        function generateMusic() {
+            try {
+                const emotionText = document.getElementById('emotionText').value.trim();
+                if (!emotionText) {
+                    showStatus('请输入情绪描述', false);
+                    return;
+                }
+
+                // 禁用输入和按钮
+                const elementsToDisable = ['emotionText', 'generateButton', 'duration'];
+                elementsToDisable.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.disabled = true;
+                });
+                
+                // 显示加载状态和进度条
+                const elementsToShow = ['loading', 'progressContainer'];
+                const elementsToHide = ['status', 'promptContainer', 'audioContainer'];
+                
+                elementsToShow.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.style.display = 'block';
+                });
+                
+                elementsToHide.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.style.display = 'none';
+                });
+                
+                // 重置进度条
+                updateProgress(0);
+
+                // 获取音乐时长
+                const duration = parseInt(document.getElementById('duration').value);
+                if (isNaN(duration) || duration < 5 || duration > 30) {
+                    throw new Error('无效的音乐时长');
+                }
+
+                // 第一步：生成提示词
+                fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        emotion_text: emotionText
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success || data.stage !== 'prompt') {
+                        throw new Error(data.error || '生成失败');
+                    }
+
+                    // 显示提示词
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('promptContainer').style.display = 'block';
+                    document.getElementById('promptText').textContent = data.prompt;
+                    
+                    // 第二步：生成音乐
+                    return fetch('/generate_music', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            prompt: data.prompt,
+                            emotion_label: data.emotion_label,
+                            duration: duration
+                        })
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success || data.stage !== 'music') {
+                        throw new Error(data.error || '音乐生成失败');
+                    }
+
+                    updateProgress(100);
+                    showStatus('音乐生成成功！', true);
+                    
+                    // 设置音频播放器
+                    const audioContainer = document.getElementById('audioContainer');
+                    const rawAudioPlayer = document.getElementById('rawAudioPlayer');
+                    const processedAudioPlayer = document.getElementById('processedAudioPlayer');
+                    const audioToggle = document.getElementById('audioToggle');
+                    
+                    if (audioContainer && rawAudioPlayer && processedAudioPlayer && audioToggle) {
+                        audioContainer.style.display = 'block';
+                        rawAudioPlayer.src = '/static/' + data.raw_audio_path;
+                        processedAudioPlayer.src = '/static/' + data.audio_path;
+                        
+                        rawAudioPlayer.load();
+                        processedAudioPlayer.load();
+                        
+                        // 添加切换事件监听
+                        audioToggle.addEventListener('change', function() {
+                            if (this.checked) {
+                                processedAudioPlayer.play().catch(error => {
+                                    console.warn('播放失败:', error);
+                                });
+                                rawAudioPlayer.pause();
+                            } else {
+                                rawAudioPlayer.play().catch(error => {
+                                    console.warn('播放失败:', error);
+                                });
+                                processedAudioPlayer.pause();
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    showStatus('发生错误：' + error.message, false);
+                })
+                .finally(() => {
+                    // 恢复输入和按钮
+                    elementsToDisable.forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) element.disabled = false;
+                    });
+                });
+
+                // 模拟进度更新
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 1;
+                    if (progress <= 90) {
+                        updateProgress(progress);
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 500);
+            } catch (error) {
+                showStatus('发生错误：' + error.message, false);
+                // 确保所有元素恢复可用状态
+                ['emotionText', 'generateButton', 'duration'].forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.disabled = false;
+                });
+            }
+        }
+
+        // 添加回车键支持
+        document.getElementById('emotionText').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateMusic();
+            }
+        });
+
+        // 添加音频处理参数更新函数
+        function updateParameterValue(inputId, valueId) {
+            const input = document.getElementById(inputId);
+            const value = document.getElementById(valueId);
+            value.textContent = input.value + ' dB';
+        }
+
+        // 添加音频处理参数监听器
+        document.getElementById('targetDb').addEventListener('input', function() {
+            updateParameterValue('targetDb', 'targetDbValue');
+        });
+        document.getElementById('limiterThreshold').addEventListener('input', function() {
+            updateParameterValue('limiterThreshold', 'limiterThresholdValue');
+        });
+        document.getElementById('lowShelfGain').addEventListener('input', function() {
+            updateParameterValue('lowShelfGain', 'lowShelfGainValue');
+        });
+        document.getElementById('midGain').addEventListener('input', function() {
+            updateParameterValue('midGain', 'midGainValue');
+        });
+        document.getElementById('highShelfGain').addEventListener('input', function() {
+            updateParameterValue('highShelfGain', 'highShelfGainValue');
+        });
+
+        // 添加频率范围更新函数
+        function updateFrequencyValue(inputId, valueId, unit = 'Hz') {
+            const input = document.getElementById(inputId);
+            const value = document.getElementById(valueId);
+            value.textContent = input.value + ' ' + unit;
+        }
+
+        // 添加频率范围监听器
+        document.getElementById('lowFreq').addEventListener('input', function() {
+            updateFrequencyValue('lowFreq', 'lowFreqValue');
+        });
+        document.getElementById('midLowFreq').addEventListener('input', function() {
+            updateFrequencyValue('midLowFreq', 'midLowFreqValue');
+        });
+        document.getElementById('midHighFreq').addEventListener('input', function() {
+            updateFrequencyValue('midHighFreq', 'midHighFreqValue');
+        });
+        document.getElementById('highFreq').addEventListener('input', function() {
+            updateFrequencyValue('highFreq', 'highFreqValue');
+        });
+
+        // 添加音频处理应用函数
+        function applyAudioProcessing() {
+            try {
+                const eq_params = {
+                    low_shelf_gain: parseFloat(document.getElementById('lowShelfGain').value),
+                    mid_gain: parseFloat(document.getElementById('midGain').value),
+                    high_shelf_gain: parseFloat(document.getElementById('highShelfGain').value),
+                    low_freq: parseFloat(document.getElementById('lowFreq').value),
+                    mid_low_freq: parseFloat(document.getElementById('midLowFreq').value),
+                    mid_high_freq: parseFloat(document.getElementById('midHighFreq').value),
+                    high_freq: parseFloat(document.getElementById('highFreq').value)
+                };
+                
+                const target_db = parseFloat(document.getElementById('targetDb').value);
+                const limiter_threshold = parseFloat(document.getElementById('limiterThreshold').value);
+                
+                // 参数验证
+                if (isNaN(target_db) || isNaN(limiter_threshold)) {
+                    throw new Error('音频参数无效');
+                }
+                
+                // 获取当前原始音频路径
+                const rawAudioPlayer = document.getElementById('rawAudioPlayer');
+                if (!rawAudioPlayer.src) {
+                    throw new Error('未找到原始音频');
+                }
+                
+                const rawAudioPath = rawAudioPlayer.src.split('/static/')[1];
+                if (!rawAudioPath) {
+                    throw new Error('音频路径无效');
+                }
+                
+                // 显示加载状态
+                showStatus('正在处理音频...', true);
+                
+                // 调用处理接口
+                fetch('/process_audio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        raw_audio_path: rawAudioPath,
+                        eq_params: eq_params,
+                        target_db: target_db,
+                        limiter_threshold: limiter_threshold
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        const processedAudioPlayer = document.getElementById('processedAudioPlayer');
+                        processedAudioPlayer.src = '/static/' + data.audio_path;
+                        processedAudioPlayer.load();
+                        
+                        // 如果启用了音频处理，自动播放处理后的音频
+                        if (document.getElementById('audioToggle').checked) {
+                            processedAudioPlayer.play().catch(error => {
+                                console.warn('自动播放失败:', error);
+                            });
+                        }
+                        showStatus('音频处理已更新！', true);
+                    } else {
+                        throw new Error(data.error || '音频处理更新失败');
+                    }
+                })
+                .catch(error => {
+                    showStatus('发生错误：' + error.message, false);
+                });
+            } catch (error) {
+                showStatus('发生错误：' + error.message, false);
+            }
+        }
+
+        // 优化预设参数配置
+        const presets = {
+            anxiety: {
+                target_db: -20,
+                limiter_threshold: -1,
+                low_shelf_gain: 3,
+                mid_gain: 0,
+                high_shelf_gain: -2,
+                low_freq: 100,
+                mid_low_freq: 1000,
+                mid_high_freq: 5000,
+                high_freq: 8000
+            },
+            depression: {
+                target_db: -18,
+                limiter_threshold: -1,
+                low_shelf_gain: 0,
+                mid_gain: 2,
+                high_shelf_gain: 4,
+                low_freq: 80,
+                mid_low_freq: 800,
+                mid_high_freq: 4000,
+                high_freq: 10000
+            },
+            insomnia: {
+                target_db: -22,
+                limiter_threshold: -1,
+                low_shelf_gain: 4,
+                mid_gain: -2,
+                high_shelf_gain: -3,
+                low_freq: 60,
+                mid_low_freq: 600,
+                mid_high_freq: 3000,
+                high_freq: 6000
+            },
+            stress: {
+                target_db: -21,
+                limiter_threshold: -1,
+                low_shelf_gain: 2,
+                mid_gain: 1,
+                high_shelf_gain: -1,
+                low_freq: 90,
+                mid_low_freq: 900,
+                mid_high_freq: 4500,
+                high_freq: 9000
+            },
+            distraction: {
+                target_db: -19,
+                limiter_threshold: -1,
+                low_shelf_gain: -1,
+                mid_gain: 2,
+                high_shelf_gain: 3,
+                low_freq: 120,
+                mid_low_freq: 1200,
+                mid_high_freq: 6000,
+                high_freq: 12000
+            },
+            pain: {
+                target_db: -20,
+                limiter_threshold: -1,
+                low_shelf_gain: 3,
+                mid_gain: 1,
+                high_shelf_gain: 0,
+                low_freq: 70,
+                mid_low_freq: 700,
+                mid_high_freq: 3500,
+                high_freq: 7000
+            },
+            ptsd: {
+                target_db: -23,
+                limiter_threshold: -1,
+                low_shelf_gain: 2,
+                mid_gain: -1,
+                high_shelf_gain: -2,
+                low_freq: 50,
+                mid_low_freq: 500,
+                mid_high_freq: 2500,
+                high_freq: 5000
+            }
+        };
+
+        // 优化预设应用函数
+        function applyPreset(presetName) {
+            try {
+                const preset = presets[presetName];
+                if (!preset) {
+                    throw new Error('未找到预设参数');
+                }
+
+                // 更新所有参数值
+                const parameters = [
+                    { id: 'targetDb', value: preset.target_db },
+                    { id: 'limiterThreshold', value: preset.limiter_threshold },
+                    { id: 'lowShelfGain', value: preset.low_shelf_gain },
+                    { id: 'midGain', value: preset.mid_gain },
+                    { id: 'highShelfGain', value: preset.high_shelf_gain },
+                    { id: 'lowFreq', value: preset.low_freq },
+                    { id: 'midLowFreq', value: preset.mid_low_freq },
+                    { id: 'midHighFreq', value: preset.mid_high_freq },
+                    { id: 'highFreq', value: preset.high_freq }
+                ];
+
+                // 批量更新参数
+                parameters.forEach(param => {
+                    const element = document.getElementById(param.id);
+                    if (element) {
+                        element.value = param.value;
+                        const valueElement = document.getElementById(param.id + 'Value');
+                        if (valueElement) {
+                            valueElement.textContent = param.value + (param.id.includes('Freq') ? ' Hz' : ' dB');
+                        }
+                    }
+                });
+
+                // 应用处理
+                applyAudioProcessing();
+            } catch (error) {
+                showStatus('应用预设失败：' + error.message, false);
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

@@ -1,0 +1,11 @@
+flask==2.0.1
+soundfile
+numpy
+# 暂时注释掉 audiocraft，这个库可能需要特殊处理
+# audiocraft
+torch
+torchaudio
+librosa
+transformers
+scipy
+gunicorn 
